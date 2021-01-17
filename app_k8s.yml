@@ -1,0 +1,40 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: stackio
+  name: stackio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stackio
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: stackio
+    spec:
+      containers:
+      - image: stackio:latest
+        name: stackio
+        resources: {}
+        imagePullPolicy: Never
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: stackio
+  name: stackio
+spec:
+  ports:
+  - port: 5858
+    protocol: TCP
+    targetPort: 5858
+  selector:
+    app: stackio
+  type: NodePort
+status:
+  loadBalancer: {}

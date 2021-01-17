@@ -1,0 +1,85 @@
+---
+- hosts: web
+  become: true
+  tasks:
+    - name: install minikube kubectl
+      get_url: url={{ item.url }} dest={{ item.dest }}
+      with_items:
+        - url: https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+          dest: /usr/local/bin/minikube
+        - url: https://storage.googleapis.com/kubernetes-release/release/v1.20.0/bin/linux/amd64/kubectl
+          dest: /usr/local/bin/kubectl
+    - name: chmod minikube kubectl
+      file: dest=/usr/local/bin/{{ item }} mode=0755
+      with_items:
+        - minikube
+        - kubectl
+    - name: add docker GPG key
+      apt_key: url=https://download.docker.com/linux/ubuntu/gpg
+    - name: add docker APT repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable
+    - name: install docker
+      apt:
+        name: ['docker-ce', 'docker-ce-cli', 'containerd.io']
+        update_cache: yes
+    - name: create docker group
+      group:
+        name: docker
+        system: true
+    - name: add ubuntu users to docker group
+      user:
+        name: ubuntu
+        groups: docker
+    - name: start minikube
+      shell: /usr/local/bin/minikube start
+      become_user: ubuntu
+    - name: create app directory
+      file:
+        path: /home/ubuntu/app
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: 0775
+    - name: copy app.py to remote host
+      copy:
+        src: ./app.py
+        dest: /home/ubuntu/app/app.py
+        owner: ubuntu
+        group: ubuntu
+        mode: 0644
+    - name: copy requirments.txt to remote host
+      copy:
+        src: ./requirements.txt
+        dest: /home/ubuntu/app/requirements.txt
+        owner: ubuntu
+        group: ubuntu
+        mode: 0644
+    - name: copy dockerfile to remote host
+      copy:
+        src: ./Dockerfile
+        dest: /home/ubuntu/app/Dockerfile
+        owner: ubuntu
+        group: ubuntu
+        mode: 0644
+    - name: copy k8s deploy file to remote host
+      copy:
+        src: ./app_k8s.yml
+        dest: /home/ubuntu/app/app_k8s.yml
+        owner: ubuntu
+        group: ubuntu
+        mode: 0644
+    - name: build stackio app image
+      shell: cd /home/ubuntu/app && eval $(minikube docker-env) && /usr/bin/docker build -t stackio .
+      become_user: ubuntu
+    - name: create k8s deployment and service
+      shell: /usr/local/bin/kubectl apply -f /home/ubuntu/app/app_k8s.yml 
+      become_user: ubuntu
+    - name: get k8s stackio app service
+      shell: /usr/local/bin/minikube service stackio
+      become_user: ubuntu
+      register: stackio_app_service
+      changed_when: false
+      check_mode: false
+    - name: output k8s stackio app service
+      pause: prompt="{{ stackio_app_service.stdout }}"
